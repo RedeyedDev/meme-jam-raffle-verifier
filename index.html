@@ -1,0 +1,753 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Meme Jam Raffle Verifier</title>
+<meta name="description" content="Recompute any Meme Jam raffle draw yourself: seed commitment, drand beacon, ticket list, every winner.">
+<meta name="theme-color" content="#140a1f">
+<link rel="icon" type="image/png" href="./assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800&display=swap">
+<style>
+  /* Display face = the game's: Lilita One for Latin, Nunito 800 for Cyrillic (one weight on purpose). */
+  @font-face { font-family: 'MJ Display'; font-weight: 800; font-display: swap; src: url('./assets/fonts/lilita-one-latin.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+  @font-face { font-family: 'MJ Display'; font-weight: 800; font-display: swap; src: url('./assets/fonts/lilita-one-latin-ext.woff2') format('woff2');
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+  @font-face { font-family: 'MJ Display'; font-weight: 800; font-display: swap; src: url('./assets/fonts/nunito-800-cyrillic.woff2') format('woff2');
+    unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+  @font-face { font-family: 'MJ Display'; font-weight: 800; font-display: swap; src: url('./assets/fonts/nunito-800-cyrillic-ext.woff2') format('woff2');
+    unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+
+  :root {
+    --bg: #140a1f; --bg2: #1e1030; --surface: #27173d; --surface2: #32204b; --line: #4a3566;
+    --text: #fff6ee; --muted: #b9a8cc; --faint: #7d6b95;
+    --action: #2ee6d6; --action-shadow: #157a70; --panel-shadow: 0 20px 40px rgba(0,0,0,.35);
+    --orange: #ff7a1a; --orange-shadow: #b34e00; --teal: #2ee6d6; --teal-shadow: #157a70;
+    --yellow: #ffd23f; --yellow-shadow: #b8940f; --red: #ff2d6b; --red-shadow: #a3153f;
+    --green: #3ddc84; --purple: #7b2cff; --pink: #ff5fb0; --ink: #140a1f; --cream: #fff6ee;
+    --ok: #2ee6d6; --bad: #ff2d6b; --warn: #ffd23f;
+    --hot: linear-gradient(135deg, #ff9a1f 0%, #ff3d5a 45%, #8a2be2 100%);
+    --display: 'MJ Display', 'Lilita One', 'Nunito', sans-serif;
+    --body: 'Nunito', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --spring: cubic-bezier(.34, 1.56, .64, 1); --out: cubic-bezier(.2, .8, .2, 1);
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme='dark']) {
+      --bg: #fff6ef; --bg2: #fdece0; --surface: #ffffff; --surface2: #e2fbf8; --line: #ead9cc;
+      --text: #1d0f2c; --muted: #6b5a80; --faint: #7a6a90;
+      --action: #0e9e91; --action-shadow: #0a6f66; --panel-shadow: 0 6px 20px rgba(29,15,44,.08);
+      --ok: #0e9e91; --bad: #d81b56; --warn: #a8750a;
+    }
+  }
+  :root[data-theme='light'] {
+    --bg: #fff6ef; --bg2: #fdece0; --surface: #ffffff; --surface2: #e2fbf8; --line: #ead9cc;
+    --text: #1d0f2c; --muted: #6b5a80; --faint: #7a6a90;
+    --action: #0e9e91; --action-shadow: #0a6f66; --panel-shadow: 0 6px 20px rgba(29,15,44,.08);
+    --ok: #0e9e91; --bad: #d81b56; --warn: #a8750a;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 700 15px/1.5 var(--body); }
+  a { color: var(--action); }
+  button { font: inherit; color: inherit; }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 16px; }
+  .mono { font-family: var(--mono); font-weight: 500; overflow-wrap: anywhere; }
+  .disp { font-family: var(--display); font-weight: 800; letter-spacing: .5px; }
+
+  /* ── hero ── */
+  .hero { position: relative; background: var(--hot); color: var(--cream); overflow: hidden; padding: calc(14px + env(safe-area-inset-top)) 0 84px; }
+  .hero svg.court { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .16; pointer-events: none; }
+  .hero .wrap { position: relative; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .brand { display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--cream); }
+  .brand img { height: 46px; width: auto; filter: drop-shadow(0 4px 0 rgba(20,10,31,.35)); }
+  .brand span { font: 800 12px/1 var(--display); letter-spacing: 1.5px; opacity: .9; }
+  .lang { display: flex; gap: 2px; padding: 3px; border-radius: 12px; background: rgba(20,10,31,.32); }
+  .lang button { background: none; border: 0; border-radius: 9px; padding: 6px 10px; cursor: pointer; font: 800 12px/1 var(--display); letter-spacing: 1px; color: rgba(255,246,238,.75); }
+  .lang button[aria-pressed="true"] { background: var(--cream); color: var(--ink); }
+  .hero-main { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 20px; margin-top: 26px; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 10px; background: rgba(20,10,31,.32); font: 800 11px/1 var(--display); letter-spacing: 1.5px; }
+  .eyebrow i { width: 7px; height: 7px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 0 3px rgba(46,230,214,.3); }
+  h1 { margin: 12px 0 10px; font: 800 clamp(34px, 7.2vw, 60px)/.98 var(--display); letter-spacing: 1px; text-transform: uppercase; text-shadow: 0 5px 0 rgba(20,10,31,.35); }
+  .hero p { margin: 0; max-width: 560px; font-size: 15px; line-height: 1.5; color: rgba(255,246,238,.92); }
+  .medal { width: 168px; height: 168px; flex: none; transform: rotate(8deg); filter: drop-shadow(0 10px 0 rgba(20,10,31,.3)); animation: bob 5s ease-in-out infinite; }
+  @keyframes bob { 50% { transform: rotate(4deg) translateY(-8px); } }
+
+  /* ── panels / form ── */
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 18px; box-shadow: var(--panel-shadow); }
+  .form { position: relative; margin-top: -56px; border-width: 2px; }
+  .fields { display: grid; grid-template-columns: 1fr 190px auto; gap: 10px; }
+  label.f { display: block; }
+  label.f span { display: block; margin: 0 0 5px 4px; font: 800 11px/1 var(--display); letter-spacing: 1.2px; text-transform: uppercase; color: var(--faint); }
+  input, textarea { width: 100%; min-width: 0; background: var(--bg); color: var(--text); border: 2px solid var(--line); border-radius: 14px; padding: 0 14px; height: 52px; font: 500 14px/1 var(--mono); outline: none; transition: border-color .15s, box-shadow .15s; }
+  input:focus, textarea:focus { border-color: var(--action); box-shadow: 0 0 0 3px color-mix(in srgb, var(--action) 30%, transparent); }
+  input::placeholder { color: var(--faint); font-family: var(--body); font-weight: 700; }
+  textarea { height: auto; min-height: 120px; padding: 12px 14px; font-size: 12px; line-height: 1.5; }
+  .btn { align-self: end; height: 52px; padding: 0 26px; border: 1.5px solid var(--orange-shadow); border-radius: 18px; background: var(--orange); color: var(--ink); cursor: pointer;
+    font: 800 18px/1 var(--display); letter-spacing: 1.2px; text-transform: uppercase; box-shadow: 0 5px 0 var(--orange-shadow); transition: transform .12s var(--out), box-shadow .12s var(--out); }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 6px 0 var(--orange-shadow); }
+  .btn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--orange-shadow); }
+  .btn:disabled { opacity: .6; cursor: default; transform: none; }
+  details.adv { margin-top: 12px; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 13px; list-style: none; display: inline-flex; align-items: center; gap: 6px; }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::before { content: '▸'; color: var(--faint); transition: transform .15s; }
+  details[open] > summary::before { transform: rotate(90deg); }
+  .adv p { margin: 10px 0 8px; font-size: 13px; color: var(--muted); }
+  .adv input { margin-top: 8px; height: 44px; font-size: 13px; }
+
+  /* ── sections ── */
+  h2 { margin: 34px 0 12px; display: flex; align-items: center; gap: 10px; font: 800 20px/1.1 var(--display); letter-spacing: 1px; text-transform: uppercase; }
+  h2 small { font: 800 12px/1 var(--display); letter-spacing: 1px; color: var(--faint); }
+  h2::before { content: ''; width: 10px; height: 22px; border-radius: 4px; background: var(--hot); flex: none; }
+  .muted { color: var(--muted); }
+  .rise { animation: rise .45s var(--out) both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+
+  /* ── verdict stamp ── */
+  .verdict { position: relative; margin-top: 22px; border-radius: 22px; padding: 20px 22px; display: grid; grid-template-columns: auto 1fr; gap: 6px 18px; align-items: center; color: var(--ink); overflow: hidden; }
+  .verdict.ok { background: var(--teal); box-shadow: 0 6px 0 var(--teal-shadow); }
+  .verdict.bad { background: var(--red); box-shadow: 0 6px 0 var(--red-shadow); color: var(--cream); }
+  .verdict.wait { background: var(--yellow); box-shadow: 0 6px 0 var(--yellow-shadow); }
+  .verdict.load { background: var(--surface); box-shadow: none; border: 1px solid var(--line); color: var(--text); }
+  .verdict .ico { grid-row: span 2; width: 62px; height: 62px; border-radius: 18px; background: var(--ink); color: var(--cream); display: grid; place-items: center; font: 800 32px/1 var(--display); transform: rotate(-6deg); animation: pop .5s var(--spring) both; }
+  .verdict.bad .ico { color: var(--red); } .verdict.ok .ico { color: var(--teal); } .verdict.wait .ico { color: var(--yellow); }
+  @keyframes pop { from { transform: rotate(-30deg) scale(.2); opacity: 0; } }
+  .verdict b { font: 800 clamp(26px, 6vw, 38px)/1 var(--display); letter-spacing: 1.5px; text-transform: uppercase; }
+  .verdict span.sub { font-size: 14px; line-height: 1.4; opacity: .88; }
+  .confetti { position: absolute; inset: 0; pointer-events: none; }
+  .confetti i { position: absolute; top: -12px; width: 9px; height: 14px; border-radius: 2px; animation: fall 1.6s var(--out) both; }
+  @keyframes fall { to { transform: translateY(190px) rotate(540deg); opacity: 0; } }
+  .spin { width: 26px; height: 26px; border-radius: 50%; border: 4px solid var(--line); border-top-color: var(--orange); animation: sp .8s linear infinite; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+
+  /* ── raffle head + stats ── */
+  .rhead { margin-top: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .rhead .num { padding: 6px 12px; border-radius: 12px; background: var(--hot); color: var(--cream); font: 800 16px/1 var(--display); letter-spacing: 1px; }
+  .rhead .ttl { font: 800 22px/1.15 var(--display); letter-spacing: .5px; flex: 1 1 200px; }
+  .pill { padding: 5px 10px; border-radius: 10px; font: 800 11px/1 var(--display); letter-spacing: 1.2px; text-transform: uppercase; background: var(--surface2); color: var(--muted); border: 1px solid var(--line); }
+  .pill.done { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+  .stats { margin-top: 12px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; box-shadow: var(--panel-shadow); min-width: 0; }
+  .stat b { display: block; font: 800 26px/1.05 var(--display); letter-spacing: .5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stat span { display: block; margin-top: 4px; font: 800 10.5px/1.2 var(--display); letter-spacing: 1.1px; text-transform: uppercase; color: var(--faint); }
+  .stats.two { grid-template-columns: 1fr 1fr; } .stats.two .stat b { font-size: 22px; }
+  .stat a { color: inherit; text-decoration-color: var(--action); }
+
+  /* ── formula: seed + drand = key ── */
+  .formula { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 8px; align-items: stretch; }
+  .half { position: relative; background: var(--surface); border: 1px solid var(--line); border-top: 5px solid var(--c); border-radius: 18px; padding: 14px; min-width: 0; box-shadow: var(--panel-shadow); display: flex; flex-direction: column; gap: 8px; }
+  .half.dim { opacity: .55; }
+  .half h3 { margin: 0; display: flex; align-items: center; gap: 8px; font: 800 15px/1 var(--display); letter-spacing: 1.2px; text-transform: uppercase; color: var(--text); }
+  .half h3 i { width: 28px; height: 28px; border-radius: 9px; background: var(--c); color: var(--ink); display: grid; place-items: center; font-style: normal; font-size: 15px; }
+  .half p { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+  .op { align-self: center; width: 30px; height: 30px; border-radius: 50%; background: var(--surface2); border: 1px solid var(--line); display: grid; place-items: center; font: 800 18px/1 var(--display); color: var(--muted); }
+  .kv { min-width: 0; }
+  .kv > span { display: block; font: 800 10px/1 var(--display); letter-spacing: 1.1px; text-transform: uppercase; color: var(--faint); margin-bottom: 4px; }
+  .hash { display: block; width: 100%; text-align: left; background: var(--bg); border: 1px dashed var(--line); border-radius: 10px; padding: 7px 9px; cursor: pointer; font: 500 11px/1.45 var(--mono); color: var(--text); overflow-wrap: anywhere; position: relative; transition: border-color .15s; }
+  .hash:hover { border-color: var(--action); }
+  .hash.copied { border-color: var(--ok); border-style: solid; }
+  .hash.copied::after { content: attr(data-ok); position: absolute; right: 6px; top: -9px; padding: 2px 6px; border-radius: 6px; background: var(--ok); color: var(--ink); font: 800 9px/1.2 var(--display); letter-spacing: 1px; }
+
+  /* ── timeline ── */
+  .tl { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; gap: 8px; margin-top: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px; box-shadow: var(--panel-shadow); }
+  .tl .n b { display: block; font: 800 13px/1.15 var(--display); letter-spacing: 1px; text-transform: uppercase; }
+  .tl .n span { display: block; margin-top: 3px; font: 500 11px/1.3 var(--mono); color: var(--muted); }
+  .tl .gap { text-align: center; padding: 4px 10px; border-radius: 10px; background: var(--surface2); border: 1px solid var(--line); font: 800 12px/1 var(--display); letter-spacing: .8px; color: var(--action); white-space: nowrap; }
+
+  /* ── checks ── */
+  ul.checks { list-style: none; margin: 0; padding: 4px 16px; }
+  ul.checks li { display: grid; grid-template-columns: 28px 1fr; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); animation: rise .4s var(--out) both; }
+  ul.checks li:last-child { border-bottom: 0; }
+  .ci { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font: 800 15px/1 var(--display); color: var(--ink); }
+  .ci.ok { background: var(--ok); } .ci.bad { background: var(--bad); color: var(--cream); } .ci.warn { background: var(--warn); } .ci.info { background: var(--surface2); color: var(--muted); border: 1px solid var(--line); }
+  ul.checks .t { font-size: 14px; line-height: 1.4; }
+  ul.checks .d { display: block; margin-top: 3px; font: 500 11px/1.45 var(--mono); color: var(--faint); overflow-wrap: anywhere; }
+
+  /* ── you ── */
+  .you { margin-top: 12px; border: 2px solid var(--action); background: color-mix(in srgb, var(--action) 9%, var(--surface)); border-radius: 20px; padding: 16px; display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; align-items: center; }
+  .you .tag { grid-row: span 2; padding: 12px 14px; border-radius: 16px; background: var(--action); color: var(--ink); text-align: center; box-shadow: 0 4px 0 var(--action-shadow); }
+  .you .tag small { display: block; font: 800 10px/1 var(--display); letter-spacing: 1.4px; }
+  .you .tag b { display: block; margin-top: 3px; font: 800 20px/1 var(--display); }
+  .you .line { font-size: 14px; line-height: 1.4; }
+  .you .line b { font-family: var(--display); letter-spacing: .5px; }
+  .bar { height: 10px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); overflow: hidden; }
+  .bar i { display: block; height: 100%; min-width: 4px; border-radius: 6px; background: var(--hot); }
+  .you .won { grid-column: 1 / -1; margin-top: 4px; padding: 9px 12px; border-radius: 12px; background: var(--yellow); color: var(--ink); font-size: 14px; }
+
+  /* ── winners ── */
+  .rows { padding: 4px 6px; }
+  .wrow { display: grid; grid-template-columns: 38px 1fr auto 26px; gap: 10px; align-items: center; padding: 9px 10px; border-radius: 14px; }
+  .wrow + .wrow { margin-top: 2px; }
+  .wrow.me { background: color-mix(in srgb, var(--action) 16%, transparent); box-shadow: inset 0 0 0 1.5px var(--action); }
+  .wrow .n { width: 38px; height: 38px; border-radius: 12px; background: var(--surface2); border: 1px solid var(--line); display: grid; place-items: center; font: 800 16px/1 var(--display); color: var(--muted); }
+  .wrow:nth-child(1) .n { background: var(--yellow); color: var(--ink); border-color: var(--yellow-shadow); }
+  .wrow:nth-child(2) .n { background: #c9ced8; color: var(--ink); border-color: #8d93a0; }
+  .wrow:nth-child(3) .n { background: #c98a12; color: var(--ink); border-color: #8a5e0a; }
+  .wrow .p { min-width: 0; font-size: 14.5px; line-height: 1.3; overflow-wrap: anywhere; }
+  .wrow .p em { font-style: normal; margin-left: 6px; padding: 2px 6px; border-radius: 6px; background: var(--action); color: var(--ink); font: 800 9.5px/1 var(--display); letter-spacing: 1px; vertical-align: 2px; }
+  .wrow .u { text-align: right; font: 500 13px/1.3 var(--mono); }
+  .wrow .u small { display: block; font-size: 10.5px; color: var(--bad); }
+  .colhint { display: flex; justify-content: flex-end; padding: 8px 46px 0 0; font: 800 10px/1 var(--display); letter-spacing: 1.1px; text-transform: uppercase; color: var(--faint); }
+
+  /* ── ticket list ── */
+  details.tix { margin-top: 12px; }
+  details.tix > summary { font: 800 14px/1 var(--display); letter-spacing: 1px; text-transform: uppercase; color: var(--text); padding: 4px 0; }
+  .tlist { margin-top: 10px; max-height: 340px; overflow-y: auto; padding: 8px 12px; }
+  .trow { display: grid; grid-template-columns: 78px 1fr 54px 56px; gap: 10px; align-items: center; padding: 5px 6px; border-radius: 8px; font: 500 12px/1.3 var(--mono); }
+  .trow.me { background: color-mix(in srgb, var(--action) 18%, transparent); }
+  .trow .c { text-align: right; color: var(--action); } .trow .pc { text-align: right; color: var(--faint); }
+
+  /* ── how it works ── */
+  .steps { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; counter-reset: s; margin: 0; padding: 0; list-style: none; }
+  .steps li { counter-increment: s; position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px 14px 14px 58px; font-size: 13.5px; line-height: 1.5; color: var(--muted); box-shadow: var(--panel-shadow); }
+  .steps li::before { content: counter(s); position: absolute; left: 12px; top: 12px; width: 34px; height: 34px; border-radius: 11px; background: var(--c, var(--orange)); color: var(--ink); display: grid; place-items: center; font: 800 18px/1 var(--display); box-shadow: 0 3px 0 rgba(0,0,0,.25); }
+  .steps li:nth-child(5n+1) { --c: var(--orange); } .steps li:nth-child(5n+2) { --c: var(--teal); } .steps li:nth-child(5n+3) { --c: var(--yellow); } .steps li:nth-child(5n+4) { --c: var(--pink); } .steps li:nth-child(5n+5) { --c: var(--green); }
+  .steps li:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .steps code, code.k { font: 500 12px/1.4 var(--mono); color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 1px 5px; overflow-wrap: anywhere; }
+
+  footer { margin: 44px 0 0; padding: 22px 0 calc(40px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: space-between; }
+
+  @media (max-width: 720px) {
+    .hero { padding-bottom: 76px; }
+    .hero-main { grid-template-columns: 1fr; }
+    .medal { position: absolute; right: -18px; top: 52px; width: 104px; height: 104px; opacity: .95; }
+    h1 { max-width: calc(100% - 84px); }
+    .brand img { height: 40px; }
+    .fields { grid-template-columns: 1fr; }
+    .btn { width: 100%; height: 56px; }
+    .stats { grid-template-columns: 1fr 1fr; }
+    .formula { grid-template-columns: 1fr; }
+    .op { justify-self: center; }
+    .tl { grid-template-columns: 1fr; }
+    .tl .gap { justify-self: start; }
+    .steps { grid-template-columns: 1fr; }
+    .verdict { padding: 16px; gap: 6px 14px; }
+    .verdict .ico { width: 52px; height: 52px; font-size: 26px; }
+    .trow { grid-template-columns: 70px 1fr 46px 50px; gap: 8px; }
+    .colhint { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <svg class="court" viewBox="0 0 1200 420" preserveAspectRatio="xMidYMid slice" aria-hidden="true" fill="none" stroke="#fff6ee" stroke-width="4">
+    <circle cx="600" cy="210" r="120"/><circle cx="600" cy="210" r="34"/><path d="M600-20V440"/>
+    <path d="M-20 60h190a150 150 0 0 1 0 300H-20"/><path d="M1220 60h-190a150 150 0 0 0 0 300h190"/>
+    <path d="M-20-40a440 440 0 0 1 0 500"/><path d="M1220-40a440 440 0 0 0 0 500"/>
+  </svg>
+  <div class="wrap">
+    <div class="topbar">
+      <a class="brand" href="https://t.me/meme_jam_bot/meme_jam_app" target="_blank" rel="noopener"><img src="./assets/logo.webp" alt="Meme Jam"></a>
+      <div class="lang" role="group" aria-label="Language"><button data-lang="en">EN</button><button data-lang="ru">RU</button><button data-lang="ua">UA</button></div>
+    </div>
+    <div class="hero-main">
+      <div>
+        <span class="eyebrow"><i></i><span data-i18n="eyebrow"></span></span>
+        <h1 data-i18n="h1"></h1>
+        <p data-i18n="intro"></p>
+      </div>
+      <img class="medal" src="./assets/raffle.webp" alt="" width="168" height="168">
+    </div>
+  </div>
+</div>
+
+<main class="wrap">
+  <div class="panel form">
+    <div class="fields">
+      <label class="f"><span data-i18n="lContest"></span><input id="contest" autocomplete="off" spellcheck="false" data-i18n-ph="contestph"></label>
+      <label class="f"><span data-i18n="lMe"></span><input id="me" inputmode="numeric" autocomplete="off" data-i18n-ph="meph"></label>
+      <button class="btn" id="run" data-i18n="verify"></button>
+    </div>
+    <details class="adv">
+      <summary data-i18n="advanced"></summary>
+      <p data-i18n="pasteHint"></p>
+      <textarea id="json" spellcheck="false" placeholder='{"contestId": 12, "drawSeed": "…", …}' aria-label="Fairness JSON"></textarea>
+      <input id="api" value="https://api.meme-jam.com" aria-label="API base URL" spellcheck="false">
+    </details>
+  </div>
+
+  <div id="out" aria-live="polite"></div>
+
+  <h2 data-i18n="howTitle"></h2>
+  <ol class="steps" id="steps"></ol>
+
+  <footer>
+    <span><span data-i18n="source"></span> <a href="https://github.com/RedeyedDev/meme-jam-raffle-verifier">github.com/RedeyedDev/meme-jam-raffle-verifier</a>. <span data-i18n="sourceTail"></span></span>
+    <span>MIT</span>
+  </footer>
+</main>
+
+<script type="module">
+const DRAND = {
+  chainHash: '52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971',
+  publicKey: '83cf0f2896adee7eb8b5f01fcad3912212c437e0073e911fb90022d3e760183c8c4b450b6a0a6c3ac6a5776a2d1064510d1fec758c921cc22b0e17e63aaf4bcb5ed66304de9cf809bd274ca73bab4af5a6e9c76a4bc09e76eae8991ef5ece45a',
+  genesis: 1692803367,
+  period: 3,
+  dst: 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_',
+  relays: ['https://api.drand.sh', 'https://api2.drand.sh', 'https://drand.cloudflare.com'],
+};
+const CLOSE_MARGIN_SEC = 30;
+
+const I18N = {
+  en: {
+    eyebrow: 'OPEN SOURCE · RUNS IN YOUR BROWSER', h1: 'Raffle verifier',
+    intro: 'Every Meme Jam raffle can be recomputed from public data. This page takes the draw data from the game API and the randomness beacon straight from drand, then re-runs the draw right here. No trust required.',
+    lContest: 'Raffle', lMe: 'Your id', contestph: 'Raffle # or seed hash', verify: 'Verify', meph: 'optional', advanced: 'Advanced: paste data / change API',
+    pasteHint: 'Paste a saved /contests/:id/fairness response to verify it without contacting the game API.',
+    howTitle: 'How the draw works',
+    steps: [
+      'Before the raffle opens, the server picks a secret <code>seed</code> and publishes <code>sha256(seed)</code>, the commitment. After that the seed can’t be swapped without it showing.',
+      'When sales close, the draw is pinned to a <a href="https://drand.love" target="_blank" rel="noopener">drand</a> quicknet round: the first round at least 30 s after closing. drand is run by the League of Entropy. Every round is a threshold BLS signature, so nobody can predict it or forge it, the game included.',
+      'Draw key = <code>HMAC-SHA256(seed, drandRandomness)</code>. Neither half alone decides anything: the seed was fixed before sales opened, and the beacon didn’t exist until after they closed.',
+      'Ticket list = <code>[[userId, tickets], …]</code> sorted by userId. Its hash is <code>sha256(JSON.stringify(list))</code>.',
+      'For prize <code>i</code>: <code>HMAC-SHA256(key, "contestId:i:ticketListHash")</code>. The first 4 bytes are read as a uint32, divided by 2³² and multiplied by the tickets remaining. That gives a position in the weighted list. The winner burns one ticket.',
+    ],
+    source: 'Source:', sourceTail: 'There’s also a standard-library Python version, verify.py.',
+    loading: 'Recomputing the draw…', loadingSub: 'Fetching the draw data and the drand round',
+    vOk: 'Swish!', vOkSub: 'All checks passed. The draw is exactly reproducible.',
+    vBad: 'Airball', vBadSub: 'Mismatch. See the ✗ lines below.',
+    vWait: 'Not drawn yet', vWaitSub: 'The seed is sealed until the draw. Save the commitment below and come back after it.',
+    vErr: 'Timeout', endsIn: 'Sales close in {t}', closed: 'Sales are closed, the draw is about to run.',
+    stDone: 'Drawn', stWait: 'Waiting for the draw', sPlayers: 'Players', sTickets: 'Tickets', sPrizes: 'Prizes drawn', sRound: 'drand round', sCloses: 'Sales close', sNone: 'not pinned yet',
+    fTitle: 'Two halves of the draw key',
+    seed: 'Server seed', seedSub: 'Fixed before sales opened. Its hash was public all along.', commitment: 'Commitment · sha256(seed)', seedRev: 'Seed, revealed after the draw', seedSealed: 'Sealed until the draw',
+    drand: 'drand beacon', drandSub: 'Published only after sales closed. Nobody could know it earlier.', round: 'Round', randomness: 'Randomness', notPinned: 'The round is pinned when sales close.',
+    drandLegacy: 'This raffle was drawn before the beacon shipped.',
+    key: 'Draw key', keySub: 'HMAC-SHA256(seed, randomness). Every winner is derived from it.', keyLegacy: 'Seed only (commit-reveal).', keyLater: 'Appears after the draw.',
+    tlClosed: 'Sales closed', tlRound: 'drand round out', tlDrawn: 'Draw ran', copy: 'COPIED',
+    checks: 'Checks',
+    cSeed: 'sha256(seed) equals the commitment published before the start',
+    cBeaconSig: 'drand round {r}: BLS signature is valid for this round (checked against the League of Entropy public key)',
+    cBeaconSigSkip: 'BLS check skipped: the crypto library couldn’t load (open this page over https). randomness = sha256(signature) is still checked.',
+    cBeaconRand: 'drand randomness = sha256(signature)', cBeaconMatch: 'The randomness used by the game matches what drand published',
+    cTiming: 'The round came out {d} s after sales closed (must be ≥ {m} s)', cDrawn: 'The draw ran {d} s after the round came out',
+    cLegacy: 'No drand round: this raffle was drawn before the beacon shipped (seed-only commit-reveal).',
+    cTickets: 'Ticket list hash matches ({p} players, {t} tickets)',
+    cWinners: 'All {n} winners recomputed and match', cWinnersBad: '{n} of {total} winners don’t match',
+    winners: 'Winners', colHint: 'Recomputed here = announced', noWinners: 'Nobody bought tickets, so there are no winners.', recomputed: 'recomputed', announced: 'announced', youTag: 'YOU',
+    you: '<b>{t}</b> of {total} tickets. Your chance at the first prize was <b>{pct}%</b>.', youNone: 'User #{id} had no tickets in this raffle.',
+    youWon: '🏆 You won: {list}', youLost: 'No prize this time.',
+    participants: 'Ticket list', error: 'Error: ',
+    badInput: 'Enter a raffle number or a 64-character seed hash.', hashNotFound: 'No raffle has this seed hash. Check that you copied it in full.',
+    notFound: 'There is no raffle #{id}.', foundByHash: 'Found by seed hash',
+  },
+  ru: {
+    eyebrow: 'ОТКРЫТЫЙ КОД · СЧИТАЕТ ТВОЙ БРАУЗЕР', h1: 'Проверка розыгрыша',
+    intro: 'Любой розыгрыш Meme Jam можно пересчитать по публичным данным. Страница берёт данные розыгрыша из API игры, а маяк случайности — напрямую у drand, и заново проводит розыгрыш прямо здесь. Верить на слово не нужно.',
+    lContest: 'Розыгрыш', lMe: 'Твой id', contestph: 'Номер розыгрыша или хеш сида', verify: 'Проверить', meph: 'необязательно', advanced: 'Дополнительно: вставить данные / сменить API',
+    pasteHint: 'Вставь сохранённый ответ /contests/:id/fairness — проверка пройдёт без обращения к API игры.',
+    howTitle: 'Как устроен розыгрыш',
+    steps: [
+      'До открытия розыгрыша сервер выбирает секретный <code>seed</code> и публикует <code>sha256(seed)</code> — commitment. После этого подменить сид незаметно нельзя.',
+      'При закрытии продаж за розыгрышем закрепляется раунд <a href="https://drand.love" target="_blank" rel="noopener">drand</a> quicknet — первый, который выйдет не раньше чем через 30 с после закрытия. drand ведёт League of Entropy; каждый раунд — пороговая BLS-подпись, её нельзя ни предсказать, ни подделать, в том числе игре.',
+      'Ключ розыгрыша = <code>HMAC-SHA256(seed, drandRandomness)</code>. Ни одна половина сама ничего не решает: сид зафиксирован до начала продаж, маяка не существовало до их конца.',
+      'Список билетов = <code>[[userId, билетов], …]</code>, отсортированный по userId. Его хеш — <code>sha256(JSON.stringify(list))</code>.',
+      'Для приза <code>i</code>: <code>HMAC-SHA256(ключ, "contestId:i:ticketListHash")</code>. Первые 4 байта читаются как uint32, делятся на 2³² и умножаются на число оставшихся билетов — получается позиция во взвешенном списке. У победителя сгорает 1 билет.',
+    ],
+    source: 'Исходники:', sourceTail: 'Там же есть версия на Python без зависимостей — verify.py.',
+    loading: 'Пересчитываю розыгрыш…', loadingSub: 'Загружаю данные розыгрыша и раунд drand',
+    vOk: 'Swish!', vOkSub: 'Все проверки пройдены. Розыгрыш воспроизводится один в один.',
+    vBad: 'Airball', vBadSub: 'Есть расхождение — смотри строки с ✗.',
+    vWait: 'Ещё не разыгран', vWaitSub: 'Сид запечатан до розыгрыша. Сохрани commitment ниже и возвращайся после него.',
+    vErr: 'Timeout', endsIn: 'Продажи закроются через {t}', closed: 'Продажи закрыты, розыгрыш вот-вот пройдёт.',
+    stDone: 'Разыгран', stWait: 'Ждёт розыгрыша', sPlayers: 'Игроков', sTickets: 'Билетов', sPrizes: 'Призов разыграно', sRound: 'Раунд drand', sCloses: 'Закрытие продаж', sNone: 'ещё не закреплён',
+    fTitle: 'Две половины ключа розыгрыша',
+    seed: 'Сид сервера', seedSub: 'Зафиксирован до начала продаж. Его хеш был опубликован с самого старта.', commitment: 'Commitment · sha256(seed)', seedRev: 'Сид, раскрыт после розыгрыша', seedSealed: 'Запечатан до розыгрыша',
+    drand: 'Маяк drand', drandSub: 'Вышел только после закрытия продаж. Раньше его не знал никто.', round: 'Раунд', randomness: 'Случайность', notPinned: 'Раунд закрепится при закрытии продаж.',
+    drandLegacy: 'Этот розыгрыш прошёл до появления маяка.',
+    key: 'Ключ розыгрыша', keySub: 'HMAC-SHA256(seed, randomness). Из него выводится каждый победитель.', keyLegacy: 'Только сид (commit-reveal).', keyLater: 'Появится после розыгрыша.',
+    tlClosed: 'Продажи закрыты', tlRound: 'Вышел раунд drand', tlDrawn: 'Розыгрыш проведён', copy: 'СКОПИРОВАНО',
+    checks: 'Проверки',
+    cSeed: 'sha256(seed) совпадает с commitment, опубликованным до старта',
+    cBeaconSig: 'Раунд drand {r}: BLS-подпись валидна для этого раунда (проверено ключом League of Entropy)',
+    cBeaconSigSkip: 'BLS-проверка пропущена: криптобиблиотека не загрузилась (открой страницу по https). randomness = sha256(подписи) всё равно проверяется.',
+    cBeaconRand: 'Случайность drand = sha256(подписи)', cBeaconMatch: 'Случайность, которую использовала игра, совпадает с опубликованной drand',
+    cTiming: 'Раунд вышел через {d} с после закрытия продаж (нужно ≥ {m} с)', cDrawn: 'Розыгрыш проведён через {d} с после выхода раунда',
+    cLegacy: 'Раунда drand нет: розыгрыш прошёл до появления маяка (commit-reveal только сида).',
+    cTickets: 'Хеш списка билетов совпадает ({p} игроков, {t} билетов)',
+    cWinners: 'Все {n} победителей пересчитаны и совпадают', cWinnersBad: 'Не совпали {n} из {total} победителей',
+    winners: 'Победители', colHint: 'Пересчитано здесь = объявлено', noWinners: 'Билеты никто не покупал — победителей нет.', recomputed: 'пересчитано', announced: 'объявлено', youTag: 'ТЫ',
+    you: '<b>{t}</b> из {total} билетов. Шанс на первый приз был <b>{pct}%</b>.', youNone: 'У #{id} не было билетов в этом розыгрыше.',
+    youWon: '🏆 Ты выиграл: {list}', youLost: 'В этот раз без приза.',
+    participants: 'Список билетов', error: 'Ошибка: ',
+    badInput: 'Введи номер розыгрыша или хеш сида из 64 символов.', hashNotFound: 'Розыгрыша с таким хешем сида нет. Проверь, что скопировал его целиком.',
+    notFound: 'Розыгрыша #{id} нет.', foundByHash: 'Найден по хешу сида',
+  },
+  ua: {
+    eyebrow: 'ВІДКРИТИЙ КОД · РАХУЄ ТВІЙ БРАУЗЕР', h1: 'Перевірка розіграшу',
+    intro: 'Будь-який розіграш Meme Jam можна перерахувати за публічними даними. Сторінка бере дані розіграшу з API гри, а маяк випадковості — напряму в drand, і заново проводить розіграш просто тут. Вірити на слово не потрібно.',
+    lContest: 'Розіграш', lMe: 'Твій id', contestph: 'Номер розіграшу або хеш сіду', verify: 'Перевірити', meph: 'необовʼязково', advanced: 'Додатково: вставити дані / змінити API',
+    pasteHint: 'Встав збережену відповідь /contests/:id/fairness — перевірка пройде без звернення до API гри.',
+    howTitle: 'Як влаштований розіграш',
+    steps: [
+      'До відкриття розіграшу сервер обирає секретний <code>seed</code> і публікує <code>sha256(seed)</code> — commitment. Після цього непомітно підмінити сід неможливо.',
+      'Під час закриття продажів за розіграшем закріплюється раунд <a href="https://drand.love" target="_blank" rel="noopener">drand</a> quicknet — перший, що вийде не раніше ніж через 30 с після закриття. drand веде League of Entropy; кожен раунд — пороговий BLS-підпис, його неможливо ні передбачити, ні підробити, зокрема й грі.',
+      'Ключ розіграшу = <code>HMAC-SHA256(seed, drandRandomness)</code>. Жодна половина сама нічого не вирішує: сід зафіксовано до початку продажів, маяка не існувало до їх кінця.',
+      'Список квитків = <code>[[userId, квитків], …]</code>, відсортований за userId. Його хеш — <code>sha256(JSON.stringify(list))</code>.',
+      'Для призу <code>i</code>: <code>HMAC-SHA256(ключ, "contestId:i:ticketListHash")</code>. Перші 4 байти читаються як uint32, діляться на 2³² і множаться на кількість квитків, що залишилися, — виходить позиція у зваженому списку. У переможця згорає 1 квиток.',
+    ],
+    source: 'Вихідний код:', sourceTail: 'Там же є версія на Python без залежностей — verify.py.',
+    loading: 'Перераховую розіграш…', loadingSub: 'Завантажую дані розіграшу та раунд drand',
+    vOk: 'Swish!', vOkSub: 'Усі перевірки пройдено. Розіграш відтворюється один в один.',
+    vBad: 'Airball', vBadSub: 'Є розбіжність — дивись рядки з ✗.',
+    vWait: 'Ще не розіграно', vWaitSub: 'Сід запечатано до розіграшу. Збережи commitment нижче й повертайся після нього.',
+    vErr: 'Timeout', endsIn: 'Продажі закриються через {t}', closed: 'Продажі закрито, розіграш от-от відбудеться.',
+    stDone: 'Розіграно', stWait: 'Чекає на розіграш', sPlayers: 'Гравців', sTickets: 'Квитків', sPrizes: 'Призів розіграно', sRound: 'Раунд drand', sCloses: 'Закриття продажів', sNone: 'ще не закріплено',
+    fTitle: 'Дві половини ключа розіграшу',
+    seed: 'Сід сервера', seedSub: 'Зафіксований до початку продажів. Його хеш був опублікований із самого старту.', commitment: 'Commitment · sha256(seed)', seedRev: 'Сід, розкритий після розіграшу', seedSealed: 'Запечатаний до розіграшу',
+    drand: 'Маяк drand', drandSub: 'Вийшов лише після закриття продажів. Раніше його не знав ніхто.', round: 'Раунд', randomness: 'Випадковість', notPinned: 'Раунд закріпиться під час закриття продажів.',
+    drandLegacy: 'Цей розіграш відбувся до появи маяка.',
+    key: 'Ключ розіграшу', keySub: 'HMAC-SHA256(seed, randomness). З нього виводиться кожен переможець.', keyLegacy: 'Лише сід (commit-reveal).', keyLater: 'Зʼявиться після розіграшу.',
+    tlClosed: 'Продажі закрито', tlRound: 'Вийшов раунд drand', tlDrawn: 'Розіграш проведено', copy: 'СКОПІЙОВАНО',
+    checks: 'Перевірки',
+    cSeed: 'sha256(seed) збігається з commitment, опублікованим до старту',
+    cBeaconSig: 'Раунд drand {r}: BLS-підпис валідний для цього раунду (перевірено ключем League of Entropy)',
+    cBeaconSigSkip: 'BLS-перевірку пропущено: криптобібліотека не завантажилася (відкрий сторінку через https). randomness = sha256(підпису) все одно перевіряється.',
+    cBeaconRand: 'Випадковість drand = sha256(підпису)', cBeaconMatch: 'Випадковість, яку використала гра, збігається з опублікованою drand',
+    cTiming: 'Раунд вийшов через {d} с після закриття продажів (потрібно ≥ {m} с)', cDrawn: 'Розіграш проведено через {d} с після виходу раунду',
+    cLegacy: 'Раунду drand немає: розіграш відбувся до появи маяка (commit-reveal лише сіду).',
+    cTickets: 'Хеш списку квитків збігається ({p} гравців, {t} квитків)',
+    cWinners: 'Усіх {n} переможців перераховано, вони збігаються', cWinnersBad: 'Не збіглися {n} з {total} переможців',
+    winners: 'Переможці', colHint: 'Перераховано тут = оголошено', noWinners: 'Квитків ніхто не купував — переможців немає.', recomputed: 'перераховано', announced: 'оголошено', youTag: 'ТИ',
+    you: '<b>{t}</b> із {total} квитків. Шанс на перший приз був <b>{pct}%</b>.', youNone: 'У #{id} не було квитків у цьому розіграші.',
+    youWon: '🏆 Ти виграв: {list}', youLost: 'Цього разу без призу.',
+    participants: 'Список квитків', error: 'Помилка: ',
+    badInput: 'Введи номер розіграшу або хеш сіду з 64 символів.', hashNotFound: 'Розіграшу з таким хешем сіду немає. Перевір, що скопіював його повністю.',
+    notFound: 'Розіграшу #{id} немає.', foundByHash: 'Знайдено за хешем сіду',
+  },
+};
+
+const qs = new URLSearchParams(location.search);
+if (['light', 'dark'].includes(qs.get('theme'))) document.documentElement.dataset.theme = qs.get('theme');
+
+const LANGS = { en: 'en', ru: 'ru', ua: 'uk' };
+let lang = (() => {
+  // English unless explicitly chosen; no auto-detect from the browser language.
+  const q = (qs.get('lang') || '').toLowerCase().slice(0, 2);
+  return q === 'uk' ? 'ua' : q in I18N ? q : 'en';
+})();
+const t = (k, vars = {}) => String(I18N[lang][k] ?? I18N.en[k] ?? k).replace(/\{(\w+)\}/g, (_, v) => vars[v] ?? '');
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const nf = (n) => Number(n).toLocaleString(LANGS[lang]);
+const dt = (v) => new Date(v).toLocaleString(LANGS[lang], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZone: 'UTC' }) + ' UTC';
+
+function applyLang() {
+  document.documentElement.lang = LANGS[lang];
+  document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-ph]').forEach((el) => { el.placeholder = t(el.dataset.i18nPh); });
+  document.querySelectorAll('.lang button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lang === lang)));
+  $('steps').innerHTML = I18N[lang].steps.map((s) => `<li>${s}</li>`).join('');
+  if (lastRender) lastRender(false);
+}
+
+// ── crypto ────────────────────────────────────────────────────────────
+const enc = new TextEncoder();
+const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+const unhex = (h) => new Uint8Array(h.match(/.{2}/g).map((b) => parseInt(b, 16)));
+const sha256 = async (bytes) => new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+async function hmac(keyStr, msgStr) {
+  const key = await crypto.subtle.importKey('raw', enc.encode(keyStr), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(msgStr)));
+}
+
+let blsPromise = null;
+const loadBls = () => (blsPromise ??= import('./vendor/noble-bls12-381.js').then((m) => m.bls12_381).catch(() => null));
+
+async function verifyBls(beacon) {
+  const bls = await loadBls();
+  if (!bls) return null;
+  const roundBytes = new Uint8Array(8);
+  new DataView(roundBytes.buffer).setBigUint64(0, BigInt(beacon.round));
+  const msg = await sha256(roundBytes);
+  try {
+    const point = bls.G1.ProjectivePoint.fromAffine(bls.G1.hashToCurve(msg, { DST: DRAND.dst }).toAffine());
+    return bls.verifyShortSignature(beacon.signature, point, DRAND.publicKey);
+  } catch {
+    return false;
+  }
+}
+
+async function fetchJson(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`${url} → HTTP ${r.status}`);
+  return r.json();
+}
+async function fetchBeacon(round) {
+  let last;
+  for (const relay of DRAND.relays) {
+    try { return await fetchJson(`${relay}/${DRAND.chainHash}/public/${round}`); } catch (e) { last = e; }
+  }
+  throw last;
+}
+const roundTimeSec = (round) => DRAND.genesis + (Number(round) - 1) * DRAND.period;
+const roundUrl = (round) => `${DRAND.relays[0]}/${DRAND.chainHash}/public/${round}`;
+
+// ── verification ──────────────────────────────────────────────────────
+// Checks carry an i18n key + vars, not text, so switching the language re-renders them.
+async function verify(data) {
+  const checks = [];
+  const add = (status, key, vars, detail) => checks.push({ status, key, vars, detail });
+  const seed = data.drawSeed;
+
+  const seedHash = hex(await sha256(enc.encode(seed)));
+  add(seedHash === String(data.drawSeedHash).toLowerCase() ? 'ok' : 'bad', 'cSeed', {}, seedHash);
+
+  let drawKey = seed;
+  let timing = null;
+  if (data.drandRound) {
+    const beacon = await fetchBeacon(data.drandRound);
+    const sigOk = Number(beacon.round) === Number(data.drandRound) ? await verifyBls(beacon) : false;
+    if (sigOk === null) add('warn', 'cBeaconSigSkip');
+    else add(sigOk ? 'ok' : 'bad', 'cBeaconSig', { r: data.drandRound }, roundUrl(data.drandRound));
+    const rand = hex(await sha256(unhex(beacon.signature)));
+    add(rand === beacon.randomness ? 'ok' : 'bad', 'cBeaconRand', {}, rand);
+    add(beacon.randomness === data.drandRandomness ? 'ok' : 'bad', 'cBeaconMatch');
+    const roundTime = roundTimeSec(data.drandRound);
+    const closeGap = Math.round(roundTime - Date.parse(data.endAt) / 1000);
+    add(closeGap >= CLOSE_MARGIN_SEC ? 'ok' : 'bad', 'cTiming', { d: closeGap, m: CLOSE_MARGIN_SEC }, new Date(roundTime * 1000).toISOString());
+    timing = { roundTime, closeGap, drawGap: null };
+    if (data.drawnAt) {
+      const drawGap = Math.round(Date.parse(data.drawnAt) / 1000 - roundTime);
+      add(drawGap >= 0 ? 'ok' : 'bad', 'cDrawn', { d: drawGap });
+      timing.drawGap = drawGap;
+    }
+    drawKey = hex(await hmac(seed, beacon.randomness));
+  } else {
+    add('info', 'cLegacy');
+  }
+
+  const entries = (data.participants || [])
+    .map((p) => (Array.isArray(p) ? [Number(p[0]), Number(p[1])] : [Number(p.userId), Number(p.ticketCount)]))
+    .filter((e) => e[1] > 0)
+    .sort((a, b) => a[0] - b[0]);
+  const snapshot = entries.map((e) => [...e]);
+  const totalTickets = entries.reduce((s, e) => s + e[1], 0);
+  const ticketHash = hex(await sha256(enc.encode(JSON.stringify(entries))));
+  add(ticketHash === String(data.ticketListHash).toLowerCase() ? 'ok' : 'bad', 'cTickets', { p: entries.length, t: totalTickets }, ticketHash);
+
+  const rows = [];
+  for (const w of data.winners || []) {
+    if (!entries.length) { rows.push({ w, uid: null }); continue; }
+    const h = await hmac(drawKey, `${data.contestId}:${w.drawIndex}:${ticketHash}`);
+    const num = new DataView(h.buffer).getUint32(0);
+    const target = (num / 0x100000000) * entries.reduce((s, e) => s + e[1], 0);
+    let acc = 0, idx = 0;
+    for (let i = 0; i < entries.length; i++) { acc += entries[i][1]; if (target < acc) { idx = i; break; } }
+    const uid = entries[idx][0];
+    rows.push({ w, uid });
+    entries[idx][1] -= 1;
+    if (entries[idx][1] <= 0) entries.splice(idx, 1);
+  }
+  const mismatches = rows.filter((r) => r.uid !== Number(r.w.userId)).length;
+  if (rows.length) add(mismatches ? 'bad' : 'ok', mismatches ? 'cWinnersBad' : 'cWinners', { n: mismatches || rows.length, total: rows.length });
+
+  return { checks, rows, snapshot, totalTickets, drawKey, timing, ok: checks.every((c) => c.status !== 'bad') };
+}
+
+// ── rendering ─────────────────────────────────────────────────────────
+let lastRender = null;
+let lookedUpByHash = false;
+let countdownTimer = null;
+const ICON = { ok: '✓', bad: '✗', warn: '!', info: '·' };
+const CONFETTI = ['#ff7a1a', '#ffd23f', '#ff2d6b', '#7b2cff', '#fff6ee', '#3ddc84'];
+
+const titleOf = (d) => (lang === 'ru' ? d.titleRu : lang === 'ua' ? d.titleUa : d.titleEn) || d.title || '';
+const hashBtn = (label, value) => `<div class="kv"><span>${esc(label)}</span><button type="button" class="hash" data-copy="${esc(value)}" data-ok="${esc(t('copy'))}">${esc(value)}</button></div>`;
+const verdict = (cls, ico, title, sub, extra = '') => `<div class="verdict ${cls} rise">${extra}<div class="ico">${ico}</div><b>${esc(title)}</b><span class="sub">${sub}</span></div>`;
+const confetti = () => `<div class="confetti" aria-hidden="true">${Array.from({ length: 22 }, (_, i) =>
+  `<i style="left:${(i * 4.7 + 2) % 100}%;background:${CONFETTI[i % CONFETTI.length]};animation-delay:${(i % 7) * 70}ms;transform:rotate(${i * 37}deg)"></i>`).join('')}</div>`;
+
+function head(data, drawn) {
+  return `<div class="rhead rise">
+    <span class="num">#${esc(data.contestId)}</span><span class="ttl">${esc(titleOf(data))}</span>
+    ${lookedUpByHash ? `<span class="pill">${esc(t('foundByHash'))}</span>` : ''}
+    <span class="pill ${drawn ? 'done' : ''}">${esc(t(drawn ? 'stDone' : 'stWait'))}</span></div>`;
+}
+const stat = (value, label) => `<div class="stat"><b>${value}</b><span>${esc(label)}</span></div>`;
+const roundLink = (r) => `<a href="${roundUrl(r)}" target="_blank" rel="noopener">${esc(r)}</a>`;
+
+function formula(data, res) {
+  const drawn = !!res;
+  const beacon = !!data.drandRound;
+  const seedHalf = `<div class="half" style="--c:var(--orange)"><h3><i>🔒</i>${esc(t('seed'))}</h3><p>${esc(t('seedSub'))}</p>
+    ${hashBtn(t('commitment'), data.drawSeedHash)}
+    ${drawn ? hashBtn(t('seedRev'), data.drawSeed) : `<div class="kv"><span>${esc(t('seedSealed'))}</span><div class="hash" style="cursor:default">••••••••••••••••••••••••••••••••</div></div>`}</div>`;
+  const drandHalf = `<div class="half ${drawn && !beacon ? 'dim' : ''}" style="--c:var(--teal)"><h3><i>🎲</i>${esc(t('drand'))}</h3>
+    <p>${esc(drawn && !beacon ? t('drandLegacy') : beacon ? t('drandSub') : t('notPinned'))}</p>
+    ${beacon ? `<div class="kv"><span>${esc(t('round'))}</span><a class="hash" style="text-decoration:none;cursor:pointer" href="${roundUrl(data.drandRound)}" target="_blank" rel="noopener">#${esc(data.drandRound)} · ${esc(dt(roundTimeSec(data.drandRound) * 1000))} ↗</a></div>` : ''}
+    ${beacon && data.drandRandomness ? hashBtn(t('randomness'), data.drandRandomness) : ''}</div>`;
+  const keyHalf = `<div class="half" style="--c:var(--yellow)"><h3><i>🔑</i>${esc(t('key'))}</h3>
+    <p>${esc(!drawn ? t('keyLater') : beacon ? t('keySub') : t('keyLegacy'))}</p>
+    ${drawn ? hashBtn(beacon ? 'HMAC-SHA256' : 'seed', res.drawKey) : ''}</div>`;
+  return `<h2 class="rise">${esc(t('fTitle'))}</h2><div class="formula rise">${seedHalf}<div class="op">+</div>${drandHalf}<div class="op">=</div>${keyHalf}</div>`;
+}
+
+function fmtLeft(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  const p = (n) => String(n).padStart(2, '0');
+  return (d ? `${d}d ` : '') + `${p(h)}:${p(m)}:${p(s % 60)}`;
+}
+
+function renderPending(data) {
+  lastRender = () => {
+    clearInterval(countdownTimer);
+    const endMs = data.endAt ? Date.parse(data.endAt) : null;
+    const left = () => (endMs && endMs > Date.now() ? t('endsIn', { t: fmtLeft(endMs - Date.now()) }) : t('closed'));
+    $('out').innerHTML = `
+      ${verdict('wait', '⏳', t('vWait'), `${esc(t('vWaitSub'))}<br><b id="cd" style="font:800 15px/1.6 var(--display);letter-spacing:.8px;text-transform:none">${esc(left())}</b>`)}
+      ${head(data, false)}
+      <div class="stats two rise">
+        ${stat(data.endAt ? esc(new Date(data.endAt).toLocaleString(LANGS[lang], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })) : '—', t('sCloses'))}
+        ${stat(data.drandRound ? roundLink(data.drandRound) : '—', data.drandRound ? t('sRound') : `${t('sRound')}: ${t('sNone')}`)}
+      </div>
+      ${formula(data, null)}`;
+    if (endMs) countdownTimer = setInterval(() => { const el = $('cd'); if (el) el.textContent = left(); }, 1000);
+  };
+  lastRender();
+}
+
+function renderResult(data, res) {
+  let first = true;
+  lastRender = () => {
+    clearInterval(countdownTimer);
+    const me = Number($('me').value) || null;
+    const mine = me ? res.snapshot.find((e) => e[0] === me) : null;
+    const myWins = me ? res.rows.filter((r) => Number(r.w.userId) === me) : [];
+    const maxT = Math.max(1, ...res.snapshot.map((e) => e[1]));
+    const youBlock = !me ? '' : `<div class="you rise">
+        <div class="tag"><small>${esc(t('youTag'))}</small><b>#${esc(me)}</b></div>
+        ${mine
+          ? `<div class="line">${t('you', { t: nf(mine[1]), total: nf(res.totalTickets), pct: ((mine[1] / res.totalTickets) * 100).toFixed(2) })}</div>
+             <div class="bar"><i style="width:${((mine[1] / res.totalTickets) * 100).toFixed(2)}%"></i></div>
+             <div class="won" ${myWins.length ? '' : 'style="background:var(--surface2);color:var(--muted)"'}>${myWins.length
+               ? esc(t('youWon', { list: myWins.map((r) => r.w.displayName || `#${r.w.prizeId}`).join(', ') }))
+               : esc(t('youLost'))}</div>`
+          : `<div class="line" style="grid-row:span 2">${esc(t('youNone', { id: me }))}</div>`}
+      </div>`;
+    const tm = res.timing;
+    const timeline = !tm ? '' : `<div class="tl rise">
+        <div class="n"><b>${esc(t('tlClosed'))}</b><span>${esc(dt(data.endAt))}</span></div>
+        <div class="gap">+${nf(tm.closeGap)} s →</div>
+        <div class="n"><b>${esc(t('tlRound'))}</b><span>#${esc(data.drandRound)} · ${esc(dt(tm.roundTime * 1000))}</span></div>
+        <div class="gap">${tm.drawGap == null ? '→' : `+${nf(tm.drawGap)} s →`}</div>
+        <div class="n"><b>${esc(t('tlDrawn'))}</b><span>${data.drawnAt ? esc(dt(data.drawnAt)) : '—'}</span></div>
+      </div>`;
+    $('out').innerHTML = `
+      ${res.ok ? verdict('ok', '✓', t('vOk'), esc(t('vOkSub')), first ? confetti() : '') : verdict('bad', '✗', t('vBad'), esc(t('vBadSub')))}
+      ${head(data, true)}
+      <div class="stats rise">
+        ${stat(nf(res.snapshot.length), t('sPlayers'))}${stat(nf(res.totalTickets), t('sTickets'))}${stat(nf(res.rows.length), t('sPrizes'))}
+        ${stat(data.drandRound ? roundLink(data.drandRound) : '—', t('sRound'))}
+      </div>
+      ${youBlock}
+      ${formula(data, res)}
+      ${timeline}
+      <h2 class="rise">${esc(t('checks'))} <small>${res.checks.filter((c) => c.status === 'ok').length}/${res.checks.filter((c) => c.status !== 'info').length}</small></h2>
+      <div class="panel rise" style="padding:0"><ul class="checks">${res.checks.map((c, i) => `
+        <li style="animation-delay:${first ? i * 70 : 0}ms"><span class="ci ${c.status}">${ICON[c.status]}</span>
+        <span class="t">${esc(t(c.key, c.vars))}${c.detail ? `<span class="d">${esc(c.detail)}</span>` : ''}</span></li>`).join('')}
+      </ul></div>
+      <h2 class="rise">${esc(t('winners'))} <small>${res.rows.length}</small></h2>
+      ${res.rows.length ? `<div class="panel rise" style="padding:0"><div class="colhint">${esc(t('colHint'))}</div><div class="rows">${res.rows.map((r, i) => {
+        const ok = r.uid === Number(r.w.userId);
+        const isMe = me && Number(r.w.userId) === me;
+        return `<div class="wrow ${isMe ? 'me' : ''}">
+          <span class="n">${i + 1}</span>
+          <span class="p">${esc(r.w.displayName || `#${r.w.prizeId}`)}${isMe ? `<em>${esc(t('youTag'))}</em>` : ''}</span>
+          <span class="u">#${esc(r.uid ?? '—')}${ok ? '' : `<small>${esc(t('announced'))} #${esc(r.w.userId)}</small>`}</span>
+          <span class="ci ${ok ? 'ok' : 'bad'}" style="width:24px;height:24px;font-size:13px">${ok ? '✓' : '✗'}</span></div>`;
+      }).join('')}</div></div>` : `<div class="panel rise muted">${esc(t('noWinners'))}</div>`}
+      <details class="tix rise"><summary>${esc(t('participants'))} · ${nf(res.snapshot.length)}</summary>
+        <div class="panel tlist">${res.snapshot.map(([u, c]) => `
+          <div class="trow ${u === me ? 'me' : ''}"><span>#${u}</span><span class="bar"><i style="width:${(c / maxT) * 100}%"></i></span><span class="c">×${nf(c)}</span><span class="pc">${((c / res.totalTickets) * 100).toFixed(1)}%</span></div>`).join('')}
+        </div>
+      </details>`;
+    first = false;
+  };
+  lastRender();
+}
+
+async function run() {
+  const btn = $('run');
+  btn.disabled = true;
+  clearInterval(countdownTimer);
+  lastRender = null;
+  $('out').innerHTML = verdict('load', '', t('loading'), esc(t('loadingSub'))).replace('<div class="ico"></div>', '<div class="spin" style="grid-row:span 2"></div>').replace('<b>', '<b style="font-size:20px">');
+  try {
+    let data;
+    lookedUpByHash = false;
+    const pasted = $('json').value.trim();
+    if (pasted) {
+      data = JSON.parse(pasted);
+    } else {
+      const q = $('contest').value.trim().replace(/^#/, '');
+      const api = $('api').value.trim().replace(/\/$/, '');
+      const url = new URL(location.href);
+      url.searchParams.delete('contest');
+      url.searchParams.delete('hash');
+      if (/^[0-9a-f]{64}$/i.test(q)) {
+        url.searchParams.set('hash', q.toLowerCase());
+        history.replaceState(null, '', url);
+        const r = await fetch(`${api}/contests/fairness/by-hash/${q.toLowerCase()}`);
+        if (r.status === 404) throw new Error(t('hashNotFound'));
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        data = await r.json();
+        lookedUpByHash = true;
+      } else if (/^\d+$/.test(q)) {
+        url.searchParams.set('contest', q);
+        history.replaceState(null, '', url);
+        const r = await fetch(`${api}/contests/${q}/fairness`);
+        if (r.status === 404) throw new Error(t('notFound', { id: q }));
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        data = await r.json();
+      } else {
+        throw new Error(t('badInput'));
+      }
+    }
+    if (data.status !== 'completed' || !data.drawSeed) renderPending(data);
+    else renderResult(data, await verify(data));
+  } catch (e) {
+    lastRender = null;
+    $('out').innerHTML = verdict('bad', '!', t('vErr'), esc(t('error')) + esc(e.message));
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.querySelectorAll('.lang button').forEach((b) => b.addEventListener('click', () => {
+  lang = b.dataset.lang;
+  const url = new URL(location.href);
+  url.searchParams.set('lang', lang);
+  history.replaceState(null, '', url);
+  applyLang();
+}));
+$('run').addEventListener('click', run);
+$('contest').addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
+$('me').addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
+$('me').addEventListener('input', () => lastRender && lastRender());
+$('out').addEventListener('click', async (e) => {
+  const b = e.target.closest('button[data-copy]');
+  if (!b) return;
+  try { await navigator.clipboard.writeText(b.dataset.copy); } catch { return; }
+  b.classList.add('copied');
+  setTimeout(() => b.classList.remove('copied'), 1400);
+});
+applyLang();
+loadBls();
+
+if (qs.get('me')) $('me').value = qs.get('me');
+const preset = qs.get('hash') || qs.get('contest');
+if (preset) { $('contest').value = preset; run(); }
+</script>
+</body>
+</html>
