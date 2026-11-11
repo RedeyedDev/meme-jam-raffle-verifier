@@ -152,7 +152,7 @@ def main() -> int:
                 idx = j
                 break
         uid = entries[idx][0]
-        check(uid == int(w["userId"]), f"prize {i} «{w.get('displayName') or w['prizeId']}»: recomputed #{uid}, announced #{w['userId']}")
+        check(uid == int(w["userId"]), f"prize {i} «{w.get('label') or w.get('displayName') or w['prizeId']}»: recomputed #{uid}, announced #{w['userId']}")
         entries[idx][1] -= 1
         if entries[idx][1] <= 0:
             entries.pop(idx)

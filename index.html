@@ -630,7 +630,7 @@ function renderResult(data, res) {
           ? `<div class="line">${t('you', { t: nf(mine[1]), total: nf(res.totalTickets), pct: ((mine[1] / res.totalTickets) * 100).toFixed(2) })}</div>
              <div class="bar"><i style="width:${((mine[1] / res.totalTickets) * 100).toFixed(2)}%"></i></div>
              <div class="won" ${myWins.length ? '' : 'style="background:var(--surface2);color:var(--muted)"'}>${myWins.length
-               ? esc(t('youWon', { list: myWins.map((r) => r.w.displayName || `#${r.w.prizeId}`).join(', ') }))
+               ? esc(t('youWon', { list: myWins.map((r) => r.w.label || r.w.displayName || `#${r.w.prizeId}`).join(', ') }))
                : esc(t('youLost'))}</div>`
           : `<div class="line" style="grid-row:span 2">${esc(t('youNone', { id: me }))}</div>`}
       </div>`;
@@ -663,7 +663,7 @@ function renderResult(data, res) {
         const isMe = me && Number(r.w.userId) === me;
         return `<div class="wrow ${isMe ? 'me' : ''}">
           <span class="n">${i + 1}</span>
-          <span class="p">${esc(r.w.displayName || `#${r.w.prizeId}`)}${isMe ? `<em>${esc(t('youTag'))}</em>` : ''}</span>
+          <span class="p">${esc(r.w.label || r.w.displayName || `#${r.w.prizeId}`)}${isMe ? `<em>${esc(t('youTag'))}</em>` : ''}</span>
           <span class="u">#${esc(r.uid ?? '—')}${ok ? '' : `<small>${esc(t('announced'))} #${esc(r.w.userId)}</small>`}</span>
           <span class="ci ${ok ? 'ok' : 'bad'}" style="width:24px;height:24px;font-size:13px">${ok ? '✓' : '✗'}</span></div>`;
       }).join('')}</div></div>` : `<div class="panel rise muted">${esc(t('noWinners'))}</div>`}
