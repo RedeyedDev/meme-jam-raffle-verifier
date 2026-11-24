@@ -27,7 +27,7 @@ BLS signature itself (no stdlib BLS). The browser verifier (index.html) does
 the full BLS check, as does the drand CLI.
 
 Usage:
-    python3 verify.py 12                 # fetch contest #12 from the public API
+    python3 verify.py 12                 # fetch raffle #12 (the number shown in the game)
     python3 verify.py <seed hash>        # or find the raffle by its seed commitment
     python3 verify.py draw.json          # or verify a saved /fairness response
     python3 verify.py 12 --api https://api.meme-jam.com
@@ -81,14 +81,16 @@ def main() -> int:
 
     src = args[0]
     if src.isdigit():
-        data = get_json(f"{api}/contests/{int(src)}/fairness")
+        # the raffle number players see in the game; the response carries the technical
+        # contestId, which is what the pick formula uses
+        data = get_json(f"{api}/contests/fairness/by-no/{int(src)}")
     elif re.fullmatch(r"[0-9a-fA-F]{64}", src):
         data = get_json(f"{api}/contests/fairness/by-hash/{src.lower()}")
     else:
         data = json.load(open(src))
 
     if data.get("status") != "completed" or not data.get("drawSeed"):
-        print(f"Contest #{data.get('contestId')} is not drawn yet (status={data.get('status')}).")
+        print(f"Raffle #{data.get('no') or data.get('contestId')} (contestId {data.get('contestId')}) is not drawn yet (status={data.get('status')}).")
         print(f"  commitment sha256(seed) = {data.get('drawSeedHash')}")
         if data.get("drandRound"):
             print(f"  drand round pinned: {data['drandRound']}")
@@ -103,7 +105,7 @@ def main() -> int:
         ok &= bool(cond)
         print(f"{'✓' if cond else '✗'} {msg}")
 
-    print(f"Contest #{contest_id}: {data.get('title', '')}\n")
+    print(f"Raffle #{data.get('no') or contest_id} (contestId {contest_id}): {data.get('title', '')}\n")
 
     # 1. seed matches the commitment published before the start
     seed_hash = hashlib.sha256(seed.encode()).hexdigest()

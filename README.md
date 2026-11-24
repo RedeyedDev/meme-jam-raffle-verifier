@@ -2,12 +2,12 @@
 
 Recompute any [Meme Jam](https://t.me/meme_jam_bot/meme_jam_app) raffle draw yourself and check that the announced winners are exactly the ones the rules produce.
 
-**Open in the browser:** https://redeyeddev.github.io/meme-jam-raffle-verifier/?contest=12, or by the seed hash shown in the raffle: `?hash=<64 hex chars>`. The page is in English by default; `?lang=ru` or `?lang=ua` switches the language, `?theme=light|dark` forces the theme, `?me=<your id>` highlights your tickets and wins.
+**Open in the browser:** https://redeyeddev.github.io/meme-jam-raffle-verifier/?no=12 — the raffle number shown in the game — or by the seed hash shown in the raffle: `?hash=<64 hex chars>`. The number is a running count for players; the pick formula uses the raffle's technical id (`contestId`), which the page shows next to the number and the API returns in every response (`?contest=<contestId>` opens a raffle by that id). The page is in English by default; `?lang=ru` or `?lang=ua` switches the language, `?theme=light|dark` forces the theme, `?me=<your id>` highlights your tickets and wins.
 
 **Or run locally** (Python 3, standard library only):
 
 ```bash
-python3 verify.py 12            # fetches https://api.meme-jam.com/contests/12/fairness
+python3 verify.py 12            # raffle #12: fetches https://api.meme-jam.com/contests/fairness/by-no/12
 python3 verify.py <seed hash>   # finds the raffle by its seed commitment
 python3 verify.py saved.json    # verifies a saved response offline
 ```
@@ -43,7 +43,7 @@ Raffles drawn before the beacon shipped have `drandRound = null`. They use `draw
 
 ## Data
 
-`GET https://api.meme-jam.com/contests/:id/fairness` needs no auth, and neither does `GET /contests/fairness/by-hash/:seedHash`. The seed, the ticket list and the winners appear once the raffle is completed. Participants are identified only by numeric user id. The game shows you your own id in the raffle's "Fairness" block, so you can find your tickets in the list.
+`GET https://api.meme-jam.com/contests/:id/fairness` needs no auth, and neither do `GET /contests/fairness/by-no/:number` and `GET /contests/fairness/by-hash/:seedHash`. The seed, the ticket list and the winners appear once the raffle is completed. Participants are identified only by numeric user id. The game shows you your own id in the raffle's "Fairness" block, so you can find your tickets in the list.
 
 drand beacons are fetched directly from the drand relays (`api.drand.sh`, `api2.drand.sh`, `drand.cloudflare.com`), not through the game.
 

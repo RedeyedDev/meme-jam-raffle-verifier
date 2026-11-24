@@ -337,7 +337,7 @@ const I18N = {
     youWon: '🏆 You won: {list}', youLost: 'No prize this time.',
     participants: 'Ticket list', error: 'Error: ',
     badInput: 'Enter a raffle number or a 64-character seed hash.', hashNotFound: 'No raffle has this seed hash. Check that you copied it in full.',
-    notFound: 'There is no raffle #{id}.', foundByHash: 'Found by seed hash',
+    notFound: 'There is no raffle #{id}.', foundByHash: 'Found by seed hash', techId: 'Technical id of this raffle: the contestId value in the pick formula',
   },
   ru: {
     eyebrow: 'ОТКРЫТЫЙ КОД · СЧИТАЕТ ТВОЙ БРАУЗЕР', h1: 'Проверка розыгрыша',
@@ -379,7 +379,7 @@ const I18N = {
     youWon: '🏆 Ты выиграл: {list}', youLost: 'В этот раз без приза.',
     participants: 'Список билетов', error: 'Ошибка: ',
     badInput: 'Введи номер розыгрыша или хеш сида из 64 символов.', hashNotFound: 'Розыгрыша с таким хешем сида нет. Проверь, что скопировал его целиком.',
-    notFound: 'Розыгрыша #{id} нет.', foundByHash: 'Найден по хешу сида',
+    notFound: 'Розыгрыша №{id} нет.', foundByHash: 'Найден по хешу сида', techId: 'Технический id розыгрыша — значение contestId в формуле выбора',
   },
   ua: {
     eyebrow: 'ВІДКРИТИЙ КОД · РАХУЄ ТВІЙ БРАУЗЕР', h1: 'Перевірка розіграшу',
@@ -421,7 +421,7 @@ const I18N = {
     youWon: '🏆 Ти виграв: {list}', youLost: 'Цього разу без призу.',
     participants: 'Список квитків', error: 'Помилка: ',
     badInput: 'Введи номер розіграшу або хеш сіду з 64 символів.', hashNotFound: 'Розіграшу з таким хешем сіду немає. Перевір, що скопіював його повністю.',
-    notFound: 'Розіграшу #{id} немає.', foundByHash: 'Знайдено за хешем сіду',
+    notFound: 'Розіграшу №{id} немає.', foundByHash: 'Знайдено за хешем сіду', techId: 'Технічний id розіграшу — значення contestId у формулі вибору',
   },
 };
 
@@ -560,6 +560,8 @@ let countdownTimer = null;
 const ICON = { ok: '✓', bad: '✗', warn: '!', info: '·' };
 const CONFETTI = ['#ff7a1a', '#ffd23f', '#ff2d6b', '#7b2cff', '#fff6ee', '#3ddc84'];
 
+// Игрок видит порядковый номер розыгрыша (№1 — первый); contestId — технический ключ из формулы.
+const numSign = () => (lang === 'en' ? '#' : '№');
 const titleOf = (d) => (lang === 'ru' ? d.titleRu : lang === 'ua' ? d.titleUa : d.titleEn) || d.title || '';
 const hashBtn = (label, value) => `<div class="kv"><span>${esc(label)}</span><button type="button" class="hash" data-copy="${esc(value)}" data-ok="${esc(t('copy'))}">${esc(value)}</button></div>`;
 const verdict = (cls, ico, title, sub, extra = '') => `<div class="verdict ${cls} rise">${extra}<div class="ico">${ico}</div><b>${esc(title)}</b><span class="sub">${sub}</span></div>`;
@@ -568,7 +570,8 @@ const confetti = () => `<div class="confetti" aria-hidden="true">${Array.from({ 
 
 function head(data, drawn) {
   return `<div class="rhead rise">
-    <span class="num">#${esc(data.contestId)}</span><span class="ttl">${esc(titleOf(data))}</span>
+    <span class="num">${numSign()}${esc(data.no ?? data.contestId)}</span><span class="ttl">${esc(titleOf(data))}</span>
+    ${data.no != null && data.no !== data.contestId ? `<span class="pill" title="${esc(t('techId'))}">contestId ${esc(data.contestId)}</span>` : ''}
     ${lookedUpByHash ? `<span class="pill">${esc(t('foundByHash'))}</span>` : ''}
     <span class="pill ${drawn ? 'done' : ''}">${esc(t(drawn ? 'stDone' : 'stWait'))}</span></div>`;
 }
@@ -677,7 +680,7 @@ function renderResult(data, res) {
   lastRender();
 }
 
-async function run() {
+async function run(byId) {
   const btn = $('run');
   btn.disabled = true;
   clearInterval(countdownTimer);
@@ -690,10 +693,11 @@ async function run() {
     if (pasted) {
       data = JSON.parse(pasted);
     } else {
-      const q = $('contest').value.trim().replace(/^#/, '');
+      const q = $('contest').value.trim().replace(/^[#№]\s*/, '');
       const api = $('api').value.trim().replace(/\/$/, '');
       const url = new URL(location.href);
       url.searchParams.delete('contest');
+      url.searchParams.delete('no');
       url.searchParams.delete('hash');
       if (/^[0-9a-f]{64}$/i.test(q)) {
         url.searchParams.set('hash', q.toLowerCase());
@@ -703,10 +707,21 @@ async function run() {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         data = await r.json();
         lookedUpByHash = true;
-      } else if (/^\d+$/.test(q)) {
-        url.searchParams.set('contest', q);
+      } else if (byId != null) {
+        // старая ссылка ?contest=<id>: id — технический ключ, дальше показываем номер
+        const r = await fetch(`${api}/contests/${byId}/fairness`);
+        if (r.status === 404) throw new Error(t('notFound', { id: byId }));
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        data = await r.json();
+        const shown = data.no ?? data.contestId;
+        $('contest').value = shown;
+        url.searchParams.set(data.no != null ? 'no' : 'contest', shown);
         history.replaceState(null, '', url);
-        const r = await fetch(`${api}/contests/${q}/fairness`);
+      } else if (/^\d+$/.test(q)) {
+        // в поле вводят номер, который видит игрок (№1 — первый розыгрыш), не contestId
+        url.searchParams.set('no', q);
+        history.replaceState(null, '', url);
+        const r = await fetch(`${api}/contests/fairness/by-no/${q}`);
         if (r.status === 404) throw new Error(t('notFound', { id: q }));
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         data = await r.json();
@@ -731,7 +746,7 @@ document.querySelectorAll('.lang button').forEach((b) => b.addEventListener('cli
   history.replaceState(null, '', url);
   applyLang();
 }));
-$('run').addEventListener('click', run);
+$('run').addEventListener('click', () => run());
 $('contest').addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
 $('me').addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
 $('me').addEventListener('input', () => lastRender && lastRender());
@@ -746,8 +761,9 @@ applyLang();
 loadBls();
 
 if (qs.get('me')) $('me').value = qs.get('me');
-const preset = qs.get('hash') || qs.get('contest');
+const preset = qs.get('hash') || qs.get('no');
 if (preset) { $('contest').value = preset; run(); }
+else if (/^\d+$/.test(qs.get('contest') || '')) run(qs.get('contest'));
 </script>
 </body>
 </html>
